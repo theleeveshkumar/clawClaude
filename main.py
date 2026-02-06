@@ -3,16 +3,17 @@ import httpx
 from fastapi import FastAPI, Request
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 if not BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
 
-if not GEMINI_API_KEY:
-    raise RuntimeError("GEMINI_API_KEY missing")
+if not GROQ_API_KEY:
+    raise RuntimeError("GROQ_API_KEY missing")
 
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
-GEMINI_API = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+GROQ_API = "https://api.groq.com/openai/v1/chat/completions"
+
 app = FastAPI()
 
 
@@ -24,26 +25,29 @@ def root():
 async def ask_ai(prompt: str) -> str:
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
-            GEMINI_API,
+            GROQ_API,
             headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
                 "Content-Type": "application/json"
             },
             json={
-                "contents": [{
-                    "parts": [{
-                        "text": prompt
-                    }]
-                }]
+                "model": "llama-3.3-70b-versatile",  # Free & powerful
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 1024
             }
         )
 
     data = r.json()
 
+    # Parse Groq response
     try:
-        if "candidates" in data and len(data["candidates"]) > 0:
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+        if "choices" in data and len(data["choices"]) > 0:
+            return data["choices"][0]["message"]["content"]
         elif "error" in data:
-            return f"AI Error: {data['error'].get('message', 'Unknown error')}"
+            error_msg = data["error"].get("message", "Unknown error")
+            return f"AI Error: {error_msg}"
         else:
             return "AI did not return a response."
     except (KeyError, IndexError) as e:
