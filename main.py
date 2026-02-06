@@ -31,7 +31,7 @@ async def ask_ai(prompt: str) -> str:
                 "Content-Type": "application/json"
             },
             json={
-                "model": "llama-3.3-70b-versatile",  # Free & powerful
+                "model": "llama-3.3-70b-versatile",
                 "messages": [
                     {"role": "user", "content": prompt}
                 ],
@@ -41,7 +41,6 @@ async def ask_ai(prompt: str) -> str:
 
     data = r.json()
 
-    # Parse Groq response
     try:
         if "choices" in data and len(data["choices"]) > 0:
             return data["choices"][0]["message"]["content"]
@@ -63,12 +62,74 @@ async def telegram_webhook(request: Request):
 
     chat_id = data["message"]["chat"]["id"]
     text = data["message"].get("text", "")
+    
+    # Get user's first name for personalized greeting
+    user_first_name = data["message"]["from"].get("first_name", "there")
 
     if not text:
         return {"ok": True}
 
-    reply = await ask_ai(text)
+    # ✅ Handle /start command
+    if text == "/start":
+        welcome_message = f"""👋 Hello {user_first_name}! Welcome to OpenClaw AI Bot!
 
+I'm powered by Groq AI and ready to help you with:
+✨ Answering questions
+💡 Providing information
+🤖 Having conversations
+📚 Explaining concepts
+
+Just send me any message and I'll respond!
+
+Try asking me something like:
+- "What is artificial intelligence?"
+- "Tell me a fun fact"
+- "How does machine learning work?"
+
+Let's chat! 🚀"""
+        
+        reply = welcome_message
+    
+    # ✅ Handle /help command
+    elif text == "/help":
+        help_message = """🆘 How to use this bot:
+
+Simply send me any question or message, and I'll respond using AI.
+
+Available commands:
+/start - Show welcome message
+/help - Show this help message
+/about - Learn about this bot
+
+Example questions:
+- "Explain quantum physics simply"
+- "Write a poem about nature"
+- "What's the weather like today?"
+
+Feel free to ask me anything! 💬"""
+        
+        reply = help_message
+    
+    # ✅ Handle /about command
+    elif text == "/about":
+        about_message = """ℹ️ About OpenClaw AI Bot
+
+🤖 Powered by: Groq AI (Llama 3.3 70B)
+⚡ Speed: Lightning fast responses
+🆓 Cost: Completely free
+👨‍💻 Created by: @LD_Yashu
+
+This bot uses advanced AI to answer your questions and have meaningful conversations.
+
+Send /help to see how to use the bot!"""
+        
+        reply = about_message
+    
+    # ✅ Regular AI conversation
+    else:
+        reply = await ask_ai(text)
+
+    # Send the reply
     async with httpx.AsyncClient() as client:
         await client.post(
             f"{TELEGRAM_API}/sendMessage",
