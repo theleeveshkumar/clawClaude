@@ -29,40 +29,44 @@ def health():
 @app.post("/webhook")
 async def telegram_webhook(req: Request):
     data = await req.json()
+    print("Telegram update:", data)
 
     if "message" not in data:
         return {"ok": True}
 
     chat_id = data["message"]["chat"]["id"]
-    text = data["message"].get("text", "")
+    text = data["message"].get("text")
 
     if not text:
         return {"ok": True}
 
-    # Call OpenClaw
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
             OPENCLAW_API,
             headers={
                 "Authorization": f"Bearer {OPENCLAW_API_KEY}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             },
-            json={
-                "model": "gpt-4.1-mini",
-                "input": text
-            }
+            json={"prompt": text},
         )
 
-    reply = r.json()["output"][0]["content"][0]["text"]
+    data = r.json()
+    print("OpenClaw response:", data)
 
-    # Send back to Telegram
+    reply = (
+        data.get("reply")
+        or data.get("message")
+        or "No response from OpenClaw"
+    )
+
     async with httpx.AsyncClient() as client:
         await client.post(
             TELEGRAM_API,
             json={
                 "chat_id": chat_id,
-                "text": reply
-            }
+                "text": reply,
+            },
         )
 
     return {"ok": True}
+
