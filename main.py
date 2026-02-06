@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 
 app = FastAPI()
 
+# ===== ENV VARIABLES =====
 OPENCLAW_API_KEY = os.getenv("OPENCLAW_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
@@ -13,24 +14,30 @@ if not OPENCLAW_API_KEY:
 if not TELEGRAM_BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN not set")
 
+
+# ===== CONSTANTS =====
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
-# Call OpenClaw via OpenAI-compatible Responses API
-OPENCLAW_API = "https://api.openai.com/v1/responses"
+# NOTE: this endpoint must match OpenClaw docs
+OPENCLAW_API = "https://api.openclaw.ai/v1/chat"
 
+
+# ===== ROUTES =====
 @app.get("/")
 def root():
     return {"status": "telegram-openclaw-bot running"}
+
 
 @app.get("/health")
 def health():
     return {"ok": True}
 
-@app.post("/webhook")
-async def telegram_webhook(req: Request):
-    data = await req.json()
-    print("Telegram update:", data)
 
+@app.post("/webhook")
+async def telegram_webhook(request: Request):
+    data = await request.json()
+
+    # Ignore non-message updates
     if "message" not in data:
         return {"ok": True}
 
@@ -40,33 +47,37 @@ async def telegram_webhook(req: Request):
     if not text:
         return {"ok": True}
 
+    # ===== CALL OPENCLAW =====
     async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(
+        response = await client.post(
             OPENCLAW_API,
             headers={
                 "Authorization": f"Bearer {OPENCLAW_API_KEY}",
                 "Content-Type": "application/json",
             },
-            json={"prompt": text},
+            json={
+                "prompt": text
+            }
         )
 
-    data = r.json()
-    print("OpenClaw response:", data)
+    result = response.json()
+    print("OpenClaw response:", result)
 
+    # SAFE extraction (NO output key)
     reply = (
-        data.get("reply")
-        or data.get("message")
+        result.get("reply")
+        or result.get("message")
         or "No response from OpenClaw"
     )
 
+    # ===== SEND BACK TO TELEGRAM =====
     async with httpx.AsyncClient() as client:
         await client.post(
             TELEGRAM_API,
             json={
                 "chat_id": chat_id,
-                "text": reply,
-            },
+                "text": reply
+            }
         )
 
     return {"ok": True}
-
