@@ -3,49 +3,53 @@ import httpx
 from fastapi import FastAPI, Request
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # ✅ Changed to Gemini
 
 if not BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
 
-if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY missing")
+if not GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY missing")
 
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
-OPENAI_API = "https://api.openai.com/v1/responses"
+GEMINI_API = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
 app = FastAPI()
 
 
 @app.get("/")
 def root():
-    return {"status": "ok"}
+    return {"status": "telegram-openclaw-bot running"}
 
 
 async def ask_ai(prompt: str) -> str:
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
-            OPENAI_API,
+            GEMINI_API,
             headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
                 "Content-Type": "application/json"
             },
             json={
-                "model": "gpt-4.1-mini",
-                "input": prompt
+                "contents": [{
+                    "parts": [{
+                        "text": prompt
+                    }]
+                }]
             }
         )
 
     data = r.json()
 
-    # Safe parsing
-    if "output_text" in data:
-        return data["output_text"]
-
-    if "error" in data:
-        return f"AI Error: {data['error'].get('message', 'Unknown error')}"
-
-    return "AI did not return a response."
+    # ✅ Parse Gemini response
+    try:
+        if "candidates" in data and len(data["candidates"]) > 0:
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        elif "error" in data:
+            return f"AI Error: {data['error'].get('message', 'Unknown error')}"
+        else:
+            return "AI did not return a response."
+    except (KeyError, IndexError) as e:
+        return f"Error parsing AI response: {str(e)}"
 
 
 @app.post("/webhook")
@@ -57,6 +61,9 @@ async def telegram_webhook(request: Request):
 
     chat_id = data["message"]["chat"]["id"]
     text = data["message"].get("text", "")
+
+    if not text:
+        return {"ok": True}
 
     reply = await ask_ai(text)
 
