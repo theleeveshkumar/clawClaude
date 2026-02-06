@@ -3,7 +3,7 @@ import httpx
 from fastapi import FastAPI, Request
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")  # ✅ Changed to Gemini
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN missing")
@@ -12,7 +12,7 @@ if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY missing")
 
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
-GEMINI_API = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+GEMINI_API = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_API_KEY}"  # ✅ Fixed
 
 app = FastAPI()
 
@@ -40,7 +40,6 @@ async def ask_ai(prompt: str) -> str:
 
     data = r.json()
 
-    # ✅ Parse Gemini response
     try:
         if "candidates" in data and len(data["candidates"]) > 0:
             return data["candidates"][0]["content"]["parts"][0]["text"]
